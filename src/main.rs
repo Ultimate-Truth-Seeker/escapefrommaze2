@@ -90,8 +90,8 @@ pub fn render_world(framebuffer: &mut Framebuffer, player: &Player, maze: &Maze,
 }
 
 fn main() {
-    let window_width = 1500;
-    let window_height = 900;
+    let window_width = 900;
+    let window_height = 600;
     let block_size = 100;
 
     let (mut window, raylib_thread) = raylib::init()
@@ -99,6 +99,10 @@ fn main() {
         .title("Raycaster Example")
         .log_level(TraceLogLevel::LOG_WARNING)
         .build();
+    window.set_exit_key(None);
+
+    let mut paused = false;
+    let mut enabled_cursor = false;
 
     let mut framebuffer = Framebuffer::new(window_width as u32, window_height as u32, Color::BLACK);
 
@@ -112,18 +116,35 @@ fn main() {
         fov: PI/3.0,
     };
 
+    window.disable_cursor();
+    window.hide_cursor();
     while !window.window_should_close() {
+        if window.is_key_pressed(KeyboardKey::KEY_ESCAPE) {
+            paused = !paused; enabled_cursor = !enabled_cursor;
+            if enabled_cursor { window.enable_cursor(); window.show_cursor();}
+            else { 
+                window.set_mouse_position(Vector2::new((window.get_screen_width()/2) as f32, (window.get_screen_height()/2) as f32));
+                window.disable_cursor(); window.hide_cursor();
+            }
+        }
+
+        if paused {
+            let mut d = window.begin_drawing(&raylib_thread);
+            d.draw_text("PAUSED - Esc to resume", 0, 0, 20, Color::WHITE);
+            continue;
+        }
+
         // 1. clear framebuffer
         framebuffer.clear();
         
         // 2. draw the maze, passing the maze and block size
-        process_events(&window, &mut player, &maze, block_size as f32);
+        process_events(&mut window, &mut player, &maze, block_size as f32);
         //render_maze(&mut framebuffer, &maze, block_size, &player);
         render_world(&mut framebuffer, &player, &maze, block_size);
 
         // 3. swap buffers
         framebuffer.swap_buffers(&mut window, &raylib_thread);
 
-        thread::sleep(Duration::from_millis(16));
+//        thread::sleep(Duration::from_millis(16));
     }
 }

@@ -9,7 +9,7 @@ pub struct Player {
     pub fov: f32,
 }
 
-pub fn process_events(window: &RaylibHandle, player: &mut Player, maze: &Maze, block_size: f32) {
+pub fn process_events(window: &mut RaylibHandle, player: &mut Player, maze: &Maze, block_size: f32) {
     let move_speed: f32 = block_size / 10.0;
     const ROTATION_SPEED: f32 = PI / 50.0;
 
@@ -20,6 +20,20 @@ pub fn process_events(window: &RaylibHandle, player: &mut Player, maze: &Maze, b
     if window.is_key_down(KeyboardKey::KEY_RIGHT) {
         player.a += ROTATION_SPEED;
     }
+
+    let screen_w = window.get_screen_width();
+    let screen_h = window.get_screen_height();
+
+    let center = Vector2::new(
+        (screen_w / 2) as f32,
+        (screen_h / 2) as f32,
+    );
+    let mouse_pos = window.get_mouse_position(); 
+    let sensitivity: f32 = 0.003;              // tune to taste
+
+        // Only use horizontal movement to rotate
+    player.a += (mouse_pos.x - center.x) * sensitivity;
+    window.set_mouse_position(center);
 
     // Direction vector from angle
     let dir_x = player.a.cos();
@@ -42,7 +56,7 @@ pub fn process_events(window: &RaylibHandle, player: &mut Player, maze: &Maze, b
     };
 
     // Move forward
-    if window.is_key_down(KeyboardKey::KEY_UP) {
+    if window.is_key_down(KeyboardKey::KEY_UP) || window.is_key_down(KeyboardKey::KEY_W) {
         // Try moving on X axis
         let next_x = player.pos.x + dir_x * move_speed;
         if can_walk_to(next_x, player.pos.y) {
@@ -57,7 +71,7 @@ pub fn process_events(window: &RaylibHandle, player: &mut Player, maze: &Maze, b
     }
 
     // Move backward
-    if window.is_key_down(KeyboardKey::KEY_DOWN) {
+    if window.is_key_down(KeyboardKey::KEY_DOWN) || window.is_key_down(KeyboardKey::KEY_S) {
         // Try moving on X axis
         let next_x = player.pos.x - dir_x * move_speed;
         if can_walk_to(next_x, player.pos.y) {
@@ -66,6 +80,36 @@ pub fn process_events(window: &RaylibHandle, player: &mut Player, maze: &Maze, b
 
         // Try moving on Y axis
         let next_y = player.pos.y - dir_y * move_speed;
+        if can_walk_to(player.pos.x, next_y) {
+            player.pos.y = next_y;
+        }
+    }
+
+    // Move Rightward
+    if window.is_key_down(KeyboardKey::KEY_D) {
+        // Try moving on X axis
+        let next_x = player.pos.x - dir_y * move_speed;
+        if can_walk_to(next_x, player.pos.y) {
+            player.pos.x = next_x;
+        }
+
+        // Try moving on Y axis
+        let next_y = player.pos.y + dir_x * move_speed;
+        if can_walk_to(player.pos.x, next_y) {
+            player.pos.y = next_y;
+        }
+    }
+
+    // Move leftward
+    if window.is_key_down(KeyboardKey::KEY_A) {
+        // Try moving on X axis
+        let next_x = player.pos.x + dir_y * move_speed;
+        if can_walk_to(next_x, player.pos.y) {
+            player.pos.x = next_x;
+        }
+
+        // Try moving on Y axis
+        let next_y = player.pos.y - dir_x * move_speed;
         if can_walk_to(player.pos.x, next_y) {
             player.pos.y = next_y;
         }
