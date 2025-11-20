@@ -59,9 +59,7 @@ pub fn render_maze(
     //cast_ray(framebuffer, maze, player, block_size);
 }
 
-pub fn render_world(framebuffer: &mut Framebuffer, player: &Player) {
-    let maze = load_maze("maze.txt");
-    let block_size = 100;
+pub fn render_world(framebuffer: &mut Framebuffer, player: &Player, maze: &Maze, block_size: usize) {
     let num_rays = framebuffer.width;
     let hw = framebuffer.width as f32 /2.0;
     let hh = framebuffer.height as f32 /2.0;
@@ -71,17 +69,21 @@ pub fn render_world(framebuffer: &mut Framebuffer, player: &Player) {
     for i in 0..num_rays {
         let current_ray = i as f32 / num_rays as f32;
         let a = player.a - (player.fov / 2.0) + (player.fov * current_ray);
-        let intersect = cast_ray(framebuffer, &maze, &player, a, block_size, true);
+        let intersect = cast_ray(framebuffer, &maze, &player, a, block_size, false);
 
         let mut distance_to_wall = intersect.distance;
         distance_to_wall *= (player.a - a).cos();
         let distance_to_projection_plane = hw / (player.fov / 2.0).tan();
-        let stake_height = (hh / distance_to_wall) * distance_to_projection_plane * 0.25;
+        let stake_height = (hh / distance_to_wall) * distance_to_projection_plane * 0.15;
 
         let stake_top = (hh - (stake_height / 2.0)) as u32;
         let stake_bottom = (hh + (stake_height / 2.0)) as u32;
 
         for y in stake_top..stake_bottom {
+            framebuffer.set_current_color(match intersect.impact {
+                '+' => Color::YELLOW,
+                _ => Color::RED,
+            });
             framebuffer.set_pixel(i, y);
         }
     }
@@ -105,7 +107,7 @@ fn main() {
     // Load the maze once before the loop
     let maze = load_maze("maze.txt");
     let mut player = Player{
-        pos: Vector2::new(200.0, 100.0),
+        pos: Vector2::new(block_size as f32 * 2.0, block_size as f32 *1.0),
         a: PI/3.0,
         fov: PI/3.0,
     };
@@ -117,11 +119,11 @@ fn main() {
         // 2. draw the maze, passing the maze and block size
         process_events(&window, &mut player, &maze, block_size as f32);
         //render_maze(&mut framebuffer, &maze, block_size, &player);
-        render_world(&mut framebuffer, &player);
+        render_world(&mut framebuffer, &player, &maze, block_size);
 
         // 3. swap buffers
         framebuffer.swap_buffers(&mut window, &raylib_thread);
 
-        //thread::sleep(Duration::from_millis(16));
+        thread::sleep(Duration::from_millis(16));
     }
 }

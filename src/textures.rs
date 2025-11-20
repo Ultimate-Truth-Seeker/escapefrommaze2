@@ -16,15 +16,16 @@ impl TextureManager {
 
         // Map characters to texture file paths
         let texture_files = vec![
-            ('+', "assets/wall4.png"),
-            ('-', "assets/wall2.png"),
+            ('+', "assets/dirt.png"),
+            ('-', "assets/stone.png"),
             ('|', "assets/wall1.png"),
             ('g', "assets/wall5.png"),
             ('#', "assets/wall3.png"), // default/fallback
         ];
 
         for (ch, path) in texture_files {
-            let image = Image::load_image(path).expect(&format!("Failed to load image {}", path));
+            let mut image = Image::load_image(path).expect(&format!("Failed to load image {}", path));
+            image.set_format(PixelFormat::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
             let texture = rl.load_texture(thread, path).expect(&format!("Failed to load texture {}", path));
             images.insert(ch, image);
             textures.insert(ch, texture);
