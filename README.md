@@ -31,7 +31,7 @@ Maze incluye:
 
 ## 🎬 Video Demo
 
-*(pendiente poner)*
+El video se encuentra en el archivo **demo.mov** que está en la raíz del repositorio. No está puesto en el readme porque tiene sonido y está muy pesado como para ponerlo aquí.
 
 ---
 
