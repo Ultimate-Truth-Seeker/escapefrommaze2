@@ -55,7 +55,7 @@ impl Player {
                 return false;
             }
     
-            maze[j][i] == ' ' || maze[j][i] == 'g'
+            maze[j][i] == ' ' || maze[j][i] == 'g' || maze[j][i] == 's'
         };
     
         // Move forward

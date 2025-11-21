@@ -15,7 +15,7 @@ pub fn line(framebuffer: &mut Framebuffer, start: Vector2, end: Vector2) {
 
     loop {
         if x0 >= 0 && y0 >= 0 {
-            framebuffer.set_pixel(x0 as u32, y0 as u32);
+            framebuffer.set_pixel(x0 as u32, y0 as u32, 0.0);
         }
         if x0 == x1 && y0 == y1 {
             break;

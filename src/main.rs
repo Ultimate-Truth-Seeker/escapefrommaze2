@@ -24,44 +24,95 @@ use sprite::{};
 
 use crate::game::{AppState, StateHandler};
 use crate::gui::screens::Screens;
+use crate::sprite::draw_sprite;
+use crate::textures::TextureManager;
 
-fn draw_cell(
-    framebuffer: &mut Framebuffer,
-    xo: usize,
-    yo: usize,
-    block_size: usize,
-    cell: char,
-) {
-    if cell == ' ' {
-        return;
-    }
+use crate::sprite::Enemy; // or wherever your Enemy is
 
-    framebuffer.set_current_color(Color::RED);
-
-    for x in xo..xo + block_size {
-        for y in yo..yo + block_size {
-            framebuffer.set_pixel(x as u32, y as u32);
-        }
-    }
-}
-
-pub fn render_maze(
+pub fn render_minimap(
     framebuffer: &mut Framebuffer,
     maze: &Maze,
     block_size: usize,
     player: &Player,
+    enemies: &[Enemy],
 ) {
+    let fb_w = framebuffer.width as i32;
+    let fb_h = framebuffer.height as i32;
+
+    let rows = maze.len();
+    if rows == 0 { return; }
+    let cols = maze[0].len();
+
+    // Size in pixels per map cell on the minimap
+    let cell_size: i32 = 4; // tweak this if your map is big/small
+
+    let map_pixel_w = (cols as i32) * cell_size;
+    let map_pixel_h = (rows as i32) * cell_size;
+
+    let margin = 10;
+    let origin_x = fb_w - map_pixel_w - margin; // upper-right corner
+    let origin_y = margin;
+
+    // Draw map cells
     for (row_index, row) in maze.iter().enumerate() {
         for (col_index, &cell) in row.iter().enumerate() {
-            let xo = col_index * block_size;
-            let yo = row_index * block_size;
-            
-            draw_cell(framebuffer, xo, yo, block_size, cell);
+            let x0 = origin_x + (col_index as i32) * cell_size;
+            let y0 = origin_y + (row_index as i32) * cell_size;
+
+            // choose color based on cell type
+            let color = match cell {
+                ' ' => continue, // skip empty space
+                '#' => Color::DARKGRAY, // wall type 1
+                '+' => Color::BROWN,    // wall type 2
+                's' | 'S' => Color::GREEN,  // start
+                'g' | 'G' => Color::YELLOW, // goal
+                _   => Color::DARKBLUE,     // other walls
+            };
+
+            framebuffer.set_current_color(color);
+
+            for dx in 0..cell_size {
+                for dy in 0..cell_size {
+                    let px = (x0 + dx) as u32;
+                    let py = (y0 + dy) as u32;
+                    framebuffer.set_pixel(px, py, 0.0);
+                }
+            }
         }
     }
-    framebuffer.set_current_color(Color::WHITE);
-    framebuffer.set_pixel(player.pos.x as u32, player.pos.y as u32);
-    //cast_ray(framebuffer, maze, player, block_size);
+
+    // Helper to draw a marker on the minimap for a world position
+    let mut draw_marker = |world_x: f32, world_y: f32, color: Color| {
+        // convert world coords to grid indices
+        let col = (world_x / block_size as f32) as i32;
+        let row = (world_y / block_size as f32) as i32;
+
+        if row < 0 || col < 0 || row >= rows as i32 || col >= cols as i32 {
+            return;
+        }
+
+        let x0 = origin_x + col * cell_size;
+        let y0 = origin_y + row * cell_size;
+
+        framebuffer.set_current_color(color);
+        let marker_size = cell_size.max(3); // at least 3x3 so it's visible
+
+        for dx in 0..marker_size {
+            for dy in 0..marker_size {
+                let px = (x0 + dx) as u32;
+                let py = (y0 + dy) as u32;
+                framebuffer.set_pixel(px, py, 0.0);
+            }
+        }
+    };
+
+    // Draw player marker (cyan)
+    draw_marker(player.pos.x, player.pos.y, Color::SKYBLUE);
+
+    // Draw enemies (red)
+    for enemy in enemies {
+        draw_marker(enemy.pos.x, enemy.pos.y, Color::RED);
+    }
 }
 
 pub fn render_world(framebuffer: &mut Framebuffer, player: &Player, maze: &Maze, block_size: usize) {
@@ -89,7 +140,7 @@ pub fn render_world(framebuffer: &mut Framebuffer, player: &Player, maze: &Maze,
                 '+' => Color::YELLOW,
                 _ => Color::RED,
             });
-            framebuffer.set_pixel(i, y);
+            framebuffer.set_pixel(i, y, distance_to_wall);
         }
     }
 }
@@ -111,6 +162,7 @@ fn main() {
     framebuffer.set_background_color(Color::new(50, 50, 100, 255));
 
     let mut game_state = AppState::init(window_width, window_height, block_size as f32);
+    let texture_manager = TextureManager::new(&mut window, &raylib_thread);
 
     while !window.window_should_close() && !game_state.close_window {
         game_state.handle_input(&mut window);
@@ -124,9 +176,18 @@ fn main() {
                 //process_events(&mut window, &mut player, &maze, block_size as f32);
                 //render_maze(&mut framebuffer, &maze, block_size, &player);
                 render_world(&mut framebuffer, &game_state.player, &game_state.mazes[game_state.current_level], block_size);
-        
+
+                render_minimap(&mut framebuffer, &game_state.mazes[game_state.current_level], game_state.block_size as usize, &game_state.player, &game_state.enemies);
+                for enemy in &game_state.enemies {
+                    draw_sprite(&mut framebuffer, &game_state.player, enemy, &texture_manager);
+                }
                 // 3. swap buffers
-                framebuffer.swap_buffers(&mut window, &raylib_thread);
+                framebuffer.swap_buffers(&mut window, &raylib_thread, &game_state);
+            }
+            Screens::MainMenu(_) => {
+                let mut d = window.begin_drawing(&raylib_thread);
+                d.clear_background(Color::new(50, 50, 100, 255));
+                game_state.current_screen.render(&mut d);
             }
             _ => {
                 let mut d = window.begin_drawing(&raylib_thread);

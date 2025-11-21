@@ -5,7 +5,7 @@ use crate::textures::TextureManager;
 use std::{f32::consts::PI};
 
 pub struct Enemy {
-    pub pos: Vector2<>,
+    pub pos: Vector2,
     pub texture_key: char
 }
 
@@ -49,16 +49,20 @@ pub fn draw_sprite(
     let end_x = (start_x + sprite_size_usize).min(framebuffer.width as usize);
     let end_y = (start_y + sprite_size_usize).min(framebuffer.height as usize);
 
-    for x in start_x..end_x {
-        for y in start_y..end_y {
-            let tx = ((x - start_x) * 128 / sprite_size_usize) as u32;
-            let ty = ((y - start_y) * 128 / sprite_size_usize) as u32;
+    if let Some(image) = texture_manager.images.get(&enemy.texture_key) {
+        let tex_w = image.width as usize;
+        let tex_h = image.height as usize;
+        for x in start_x..end_x {
+            for y in start_y..end_y {
+                let tx = ((x - start_x) * tex_w / sprite_size_usize) as u32;
+                let ty = ((y - start_y) * tex_h / sprite_size_usize) as u32;
 
-            let color = texture_manager.get_pixel_color(enemy.texture_key, tx, ty);
-            
-            if color != TRANSPARENT_COLOR {
-                framebuffer.set_current_color(color);
-                framebuffer.set_pixel(x as u32, y as u32);
+                let color = texture_manager.get_pixel_color(enemy.texture_key, tx, ty);
+                
+                if color != TRANSPARENT_COLOR {
+                    framebuffer.set_current_color(color);
+                    framebuffer.set_pixel(x as u32, y as u32, sprite_d);
+                }
             }
         }
     }

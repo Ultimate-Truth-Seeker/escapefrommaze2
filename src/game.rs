@@ -24,7 +24,9 @@ impl AppState {
     pub fn init(w: i32, h: i32, block_size: f32) -> Self {
         let max_health = 5;
         let current_screen = Screens::main_menu(w, h);
-        let maze = load_maze("maze.txt");
+        let maze1 = load_maze("maze1.txt");
+        let maze2 = load_maze("maze2.txt");
+        let maze3 = load_maze("maze3.txt");
         let player = Player { 
             pos: Vector2::new(block_size, block_size,),
             a: PI/3.0, 
@@ -39,7 +41,7 @@ impl AppState {
              is_playing: false, 
              player: player, 
              enemies: vec![], 
-             mazes: vec![maze], 
+             mazes: vec![maze1, maze2, maze3], 
              paused: false, 
              enabled_cursor: true, 
              block_size: block_size, 
@@ -58,16 +60,16 @@ impl AppState {
 
         // Reset player
         self.player.health = self.max_health;
-        // TODO: set starting position based on level layout
         // e.g. find cell 's' in the maze and set player.pos
         let maze = &self.mazes[self.current_level];
         if let Some((i, j)) = find_start_cell(maze, 's') {
             self.player.pos.x = (i as f32 + 0.5) * self.block_size;
             self.player.pos.y = (j as f32 + 0.5) * self.block_size;
         }
+        self.player.a = PI/4.0;
 
         // Reset enemies for this level
-        //self.spawn_enemies_for_level();
+        self.spawn_enemies_for_level();
 
         // Capture mouse
         window.disable_cursor();
@@ -85,10 +87,36 @@ impl AppState {
         &mut self.mazes[self.current_level]
     }
 
+    fn spawn_enemies_for_level(&mut self) {
+        let mut pos1 = Vector2::new(1.0, 1.0);
+        let mut pos2 = Vector2::new(1.0, 1.0);
+        match self.current_level {
+            0 => {
+                pos1.x = 11.0 * self.block_size; pos1.y = 3.0 * self.block_size;
+                pos2.x = 7.0 * self.block_size; pos2.y = 7.0 * self.block_size;
+            }
+            1 => {
+                pos1.x = 11.0 * self.block_size; pos1.y = 3.0 * self.block_size;
+                pos2.x = 11.0 * self.block_size; pos2.y = 7.0 * self.block_size;
+            }
+            2 => {
+                pos1.x = 1.0 * self.block_size; pos1.y = 11.0 * self.block_size;
+                pos2.x = 1.0 * self.block_size; pos2.y = 5.0 * self.block_size;
+            }
+            _ => {}
+        }
+        self.enemies = vec![
+            Enemy {pos: pos1, texture_key: 'e'},
+            Enemy {pos: pos2, texture_key: 'e'}
+        ];
+    }
+
     /// Move enemies one step each frame to some free neighboring cell.
-    fn update_enemies(&mut self) {
+    fn update_enemies(&mut self, dt: f64) {
         let mut maze = self.current_maze().clone();
         use raylib::ffi::GetRandomValue;
+        let animation_rate = 1.0;
+
 
         for enemy in &mut self.enemies {
             // 4-neighborhood: up, down, left, right
@@ -114,6 +142,11 @@ impl AppState {
                     enemy.pos.y = next_y;
                     break;
                 }
+            }
+            if dt%animation_rate < 0.5*animation_rate {
+                enemy.texture_key = '#';
+            } else {
+                enemy.texture_key = 'e';
             }
         }
     }
@@ -160,6 +193,44 @@ impl AppState {
             }
         }
     }
+
+    pub fn render_game_screen_extras(&self, d:&mut RaylibDrawHandle) {
+        // Draw the current game screen UI (HUD, panels, etc.)
+        self.current_screen.render(d);
+
+        // ---------- HUD OVERLAYS ----------
+        let margin = 10;
+        let screen_w = self.width;
+        let screen_h = self.height;
+
+        // ---- FPS (top-right corner) ----
+        let fps = d.get_fps();
+        let fps_text = format!("FPS: {}", fps);
+        let fps_font_size = 20;
+
+        let fps_text_width = d.measure_text(&fps_text, fps_font_size);
+        let fps_x = screen_w - fps_text_width - margin;
+        let fps_y = screen_h - margin - 20;
+        d.draw_text(&fps_text, fps_x, fps_y, fps_font_size, Color::YELLOW);
+
+        // ---- Health as hearts (bottom-left corner) ----
+        let heart_font_size = 30;
+        let heart_spacing = heart_font_size; // horizontal spacing between hearts
+        let hearts_x = margin;
+        let hearts_y = screen_h - heart_font_size - margin;
+
+        for i in 0..self.max_health {
+            let x = hearts_x + i * heart_spacing;
+            let color = if (i as i32) < self.player.health {
+                Color::GREEN
+            } else {
+                Color::DARKGRAY
+            };
+            d.draw_text("*", x, hearts_y, heart_font_size, color);
+        }
+
+        // Note: The top-left corner is intentionally left free for a future labyrinth/minimap.
+    }
 }
 
 /// Helper to locate a cell with a specific character in the maze.
@@ -197,8 +268,6 @@ impl StateHandler for AppState {
                                     if let Ok(index) = index_str.parse::<usize>() {
                                         if index < self.mazes.len() {
                                             self.current_level = index;
-                                            // You could also visually highlight selected button
-                                            // (e.g. change its color here).
                                         }
                                     }
                                 }
@@ -258,7 +327,8 @@ impl StateHandler for AppState {
                     self.player.process_events(window, &maze, self.block_size);
 
                     // Move enemies
-                    self.update_enemies();
+                    let dt = window.get_time();
+                    self.update_enemies(dt);
 
                     // Enemy collisions
                     self.check_enemy_collisions();
@@ -330,6 +400,7 @@ impl StateHandler for AppState {
                             self.current_screen = Screens::game(self.width, self.height)
                         } else if let Some(Elements::Button(menu_btn)) = pnl.elements.get_mut("pause_menu") {
                             if menu_btn.clicked {
+                                self.is_playing = false;
                                 self.current_screen = Screens::main_menu(self.width, self.height);
                             } else if let Some(Elements::Button(quit_btn)) = pnl.elements.get_mut("pause_quit") {
                                 if quit_btn.clicked {
@@ -345,28 +416,45 @@ impl StateHandler for AppState {
             // VICTORY SCREEN
             // =========================
             Screens::Victory(screen) => {
+                // Update GUI elements on the victory screen
                 screen.update(window);
 
-                if let Some(Elements::Button(quit_btn)) = screen.elements.get_mut("quit") {
-                    if quit_btn.clicked {
-                        self.close_window = true;
+                // All buttons are inside the "victory_panel" panel
+                if let Some(Elements::Panel(panel)) = screen.elements.get_mut("victory_panel") {
+                    // Next level
+                    if let Some(Elements::Button(next_btn)) = panel.elements.get_mut("victory_next") {
+                        if next_btn.clicked {
+                            // Advance level if possible
+                            if self.current_level + 1 < self.mazes.len() {
+                                self.current_level += 1;
+                            } else {
+                                self.current_level = 0;
+                            }
+                            // Start the selected level
+                            self.start_level(window);
+                            return;
+                        }
                     }
-                }
-                // Buttons: "menu", "quit", maybe "replay"
-                else if let Some(Elements::Button(menu_btn)) = screen.elements.get_mut("menu") {
-                    if menu_btn.clicked {
-                        self.enabled_cursor = true;
-                        window.enable_cursor();
-                        window.show_cursor();
-                        self.current_screen = Screens::main_menu(self.width, self.height);
+
+                    // Replay current level
+                    if let Some(Elements::Button(restart_btn)) = panel.elements.get_mut("victory_restart") {
+                        if restart_btn.clicked {
+                            self.start_level(window);
+                            return;
+                        }
                     }
-                }
 
-
-                // Optional: "replay" the same level
-                else if let Some(Elements::Button(replay_btn)) = screen.elements.get_mut("replay") {
-                    if replay_btn.clicked {
-                        self.start_level(window);
+                    // Back to main menu
+                    if let Some(Elements::Button(menu_btn)) = panel.elements.get_mut("victory_menu") {
+                        if menu_btn.clicked {
+                            self.is_playing = false;
+                            self.paused = false;
+                            self.enabled_cursor = true;
+                            window.enable_cursor();
+                            window.show_cursor();
+                            self.current_screen = Screens::main_menu(self.width, self.height);
+                            return;
+                        }
                     }
                 }
             }
@@ -375,27 +463,38 @@ impl StateHandler for AppState {
             // GAME OVER SCREEN
             // =========================
             Screens::Defeat(screen) => {
+                // Update GUI elements on the defeat screen
                 screen.update(window);
 
-                if let Some(Elements::Button(menu_btn)) = screen.elements.get_mut("menu") {
-                    if menu_btn.clicked {
-                        self.enabled_cursor = true;
-                        window.enable_cursor();
-                        window.show_cursor();
-                        self.current_screen = Screens::main_menu(self.width, self.height);
+                // All buttons are inside the "defeat_panel" panel
+                if let Some(Elements::Panel(panel)) = screen.elements.get_mut("defeat_panel") {
+                    // Retry same level
+                    if let Some(Elements::Button(retry_btn)) = panel.elements.get_mut("defeat_restart") {
+                        if retry_btn.clicked {
+                            self.start_level(window);
+                            return;
+                        }
                     }
-                }
 
-                else if let Some(Elements::Button(quit_btn)) = screen.elements.get_mut("quit") {
-                    if quit_btn.clicked {
-                        self.close_window = true;
+                    // Back to main menu
+                    if let Some(Elements::Button(menu_btn)) = panel.elements.get_mut("defeat_menu") {
+                        if menu_btn.clicked {
+                            self.is_playing = false;
+                            self.paused = false;
+                            self.enabled_cursor = true;
+                            window.enable_cursor();
+                            window.show_cursor();
+                            self.current_screen = Screens::main_menu(self.width, self.height);
+                            return;
+                        }
                     }
-                }
 
-                // Optional: try again (same level)
-                else if let Some(Elements::Button(retry_btn)) = screen.elements.get_mut("retry") {
-                    if retry_btn.clicked {
-                        self.start_level(window);
+                    // Quit application
+                    if let Some(Elements::Button(quit_btn)) = panel.elements.get_mut("defeat_quit") {
+                        if quit_btn.clicked {
+                            self.close_window = true;
+                            return;
+                        }
                     }
                 }
             }
