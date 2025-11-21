@@ -5,8 +5,8 @@ use crate::textures::TextureManager;
 use std::{f32::consts::PI};
 
 pub struct Enemy {
-    pos: Vector2<>,
-    texture_key: char
+    pub pos: Vector2<>,
+    pub texture_key: char
 }
 
 const TRANSPARENT_COLOR: Color = Color::new(152, 0, 136, 255);

@@ -60,7 +60,7 @@ pub fn cast_ray(
             };
         }
 
-        if maze[j][i] != ' ' {
+        if maze[j][i] != ' ' && maze[j][i] != 'g' {
             let hitx = x - i * block_size;
             let hity = y - j * block_size;
             let mut maxhit = hity;

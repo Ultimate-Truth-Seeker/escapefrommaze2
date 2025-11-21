@@ -9,6 +9,8 @@ mod player;
 mod caster;
 mod sprite;
 mod textures;
+mod gui;
+mod game;
 
 use raylib::prelude::*;
 use std::{f32::consts::PI, thread};
@@ -16,9 +18,12 @@ use std::time::Duration;
 use framebuffer::Framebuffer;
 use line::line;
 use maze::{Maze,load_maze};
-use player::{Player, process_events};
+use player::{Player};
 use caster::{cast_ray};
 use sprite::{};
+
+use crate::game::{AppState, StateHandler};
+use crate::gui::screens::Screens;
 
 fn draw_cell(
     framebuffer: &mut Framebuffer,
@@ -101,50 +106,35 @@ fn main() {
         .build();
     window.set_exit_key(None);
 
-    let mut paused = false;
-    let mut enabled_cursor = false;
-
     let mut framebuffer = Framebuffer::new(window_width as u32, window_height as u32, Color::BLACK);
 
     framebuffer.set_background_color(Color::new(50, 50, 100, 255));
 
-    // Load the maze once before the loop
-    let maze = load_maze("maze.txt");
-    let mut player = Player{
-        pos: Vector2::new(block_size as f32 * 2.0, block_size as f32 *1.0),
-        a: PI/3.0,
-        fov: PI/3.0,
-    };
+    let mut game_state = AppState::init(window_width, window_height, block_size as f32);
 
-    window.disable_cursor();
-    window.hide_cursor();
-    while !window.window_should_close() {
-        if window.is_key_pressed(KeyboardKey::KEY_ESCAPE) {
-            paused = !paused; enabled_cursor = !enabled_cursor;
-            if enabled_cursor { window.enable_cursor(); window.show_cursor();}
-            else { 
-                window.set_mouse_position(Vector2::new((window.get_screen_width()/2) as f32, (window.get_screen_height()/2) as f32));
-                window.disable_cursor(); window.hide_cursor();
+    while !window.window_should_close() && !game_state.close_window {
+        game_state.handle_input(&mut window);
+
+        match game_state.current_screen {
+            Screens::Game(_) => {
+                // 1. clear framebuffer
+                framebuffer.clear();
+                
+                // 2. draw the maze, passing the maze and block size
+                //process_events(&mut window, &mut player, &maze, block_size as f32);
+                //render_maze(&mut framebuffer, &maze, block_size, &player);
+                render_world(&mut framebuffer, &game_state.player, &game_state.mazes[game_state.current_level], block_size);
+        
+                // 3. swap buffers
+                framebuffer.swap_buffers(&mut window, &raylib_thread);
+            }
+            _ => {
+                let mut d = window.begin_drawing(&raylib_thread);
+                game_state.current_screen.render(&mut d);
             }
         }
+        if game_state.close_window {break;}
 
-        if paused {
-            let mut d = window.begin_drawing(&raylib_thread);
-            d.draw_text("PAUSED - Esc to resume", 0, 0, 20, Color::WHITE);
-            continue;
-        }
-
-        // 1. clear framebuffer
-        framebuffer.clear();
-        
-        // 2. draw the maze, passing the maze and block size
-        process_events(&mut window, &mut player, &maze, block_size as f32);
-        //render_maze(&mut framebuffer, &maze, block_size, &player);
-        render_world(&mut framebuffer, &player, &maze, block_size);
-
-        // 3. swap buffers
-        framebuffer.swap_buffers(&mut window, &raylib_thread);
-
-//        thread::sleep(Duration::from_millis(16));
+        thread::sleep(Duration::from_millis(16));
     }
 }
