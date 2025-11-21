@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use raylib::prelude::*;
 
-use crate::{gui::{Screen, element::{Element, Elements}, screens::Screens}, maze::{Maze, load_maze}, player::Player, sprite::Enemy};
+use crate::{gui::{Screen, element::{Element, Elements}, screens::Screens}, maze::{Maze, load_maze}, player::Player, sprite::Enemy, textures::TextureManager};
 
 pub struct AppState {
     pub current_screen: Screens,
@@ -18,10 +18,16 @@ pub struct AppState {
     pub block_size: f32,
     pub max_health: i32,
     pub close_window: bool,
+    pub hit_frame: bool,
+    pub texture_manager: TextureManager,
+    animation_left: f64,
+    remaining_cooldown: f64,
+    cooldown: f64,
+    last_hit: f64,
 }
 
 impl AppState {
-    pub fn init(w: i32, h: i32, block_size: f32) -> Self {
+    pub fn init(w: i32, h: i32, block_size: f32, tm: TextureManager) -> Self {
         let max_health = 5;
         let current_screen = Screens::main_menu(w, h);
         let maze1 = load_maze("maze1.txt");
@@ -47,6 +53,12 @@ impl AppState {
              block_size: block_size, 
              max_health, 
              close_window: false,
+             hit_frame: false,
+             remaining_cooldown: 0.0,
+             cooldown: 1.0,
+             last_hit: -1.0,
+             texture_manager: tm,
+             animation_left: 0.0,
         }
 
     }
@@ -57,6 +69,9 @@ impl AppState {
         self.is_playing = true;
         self.paused = false;
         self.enabled_cursor = false;
+        self.last_hit = -self.cooldown;
+        self.remaining_cooldown = 0.0;
+        self.animation_left = 0.0;
 
         // Reset player
         self.player.health = self.max_health;
@@ -116,7 +131,7 @@ impl AppState {
         let mut maze = self.current_maze().clone();
         use raylib::ffi::GetRandomValue;
         let animation_rate = 1.0;
-
+        let move_rate = 0.25;
 
         for enemy in &mut self.enemies {
             // 4-neighborhood: up, down, left, right
@@ -130,17 +145,19 @@ impl AppState {
             let step = self.block_size / 10.0; // enemy step size
 
             // Try up to 4 random directions
-            for _ in 0..4 {
-                let idx = unsafe { GetRandomValue(0, 3) } as usize;
-                let dir = dirs[idx];
+            if dt%move_rate < 0.1 {
+                for _ in 0..4 {
+                    let idx = unsafe { GetRandomValue(0, 3) } as usize;
+                    let dir = dirs[idx];
 
-                let next_x = enemy.pos.x + dir.x * step;
-                let next_y = enemy.pos.y + dir.y * step;
+                    let next_x = enemy.pos.x + dir.x * step;
+                    let next_y = enemy.pos.y + dir.y * step;
 
-                if AppState::is_free_cell(&mut maze, next_x, next_y, self.block_size) {
-                    enemy.pos.x = next_x;
-                    enemy.pos.y = next_y;
-                    break;
+                    if AppState::is_free_cell(&mut maze, next_x, next_y, self.block_size) {
+                        enemy.pos.x = next_x;
+                        enemy.pos.y = next_y;
+                        break;
+                    }
                 }
             }
             if dt%animation_rate < 0.5*animation_rate {
@@ -148,6 +165,10 @@ impl AppState {
             } else {
                 enemy.texture_key = 'e';
             }
+        }
+        if self.animation_left <= 0.0 {
+            self.texture_manager.rotate_images();
+            self.animation_left = animation_rate;
         }
     }
 
@@ -177,16 +198,19 @@ impl AppState {
     }
 
     /// Player loses health when near an enemy.
-    fn check_enemy_collisions(&mut self) {
-        let damage_distance = self.block_size / 4.0; // tune
+    fn check_enemy_collisions(&mut self, dt: f64) {
+        let damage_distance = self.block_size / 3.5; // tune
         let damage = 1; // HP per frame per collision; you can adjust
 
         for enemy in &self.enemies {
             let dx = enemy.pos.x - self.player.pos.x;
             let dy = enemy.pos.y - self.player.pos.y;
             let dist_sq = dx * dx + dy * dy;
-            if dist_sq <= damage_distance * damage_distance {
+            if dist_sq <= damage_distance * damage_distance && dt - self.last_hit >= self.cooldown {
+                self.last_hit = dt;
                 self.player.health -= damage;
+                self.hit_frame = true;
+                self.remaining_cooldown = self.cooldown;
                 if self.player.health < 0 {
                     self.player.health = 0;
                 }
@@ -229,12 +253,18 @@ impl AppState {
             d.draw_text("*", x, hearts_y, heart_font_size, color);
         }
 
-        // Note: The top-left corner is intentionally left free for a future labyrinth/minimap.
+        if self.remaining_cooldown > 0.0 {
+            let t = self.remaining_cooldown / self.cooldown;
+            let max_a = 180.0;
+            let alpha = (t*max_a) as u8;
+            d.draw_rectangle(0, 0, self.width, self.height, Color::new(255, 0, 0, alpha));
+        }
+        
     }
 }
 
 /// Helper to locate a cell with a specific character in the maze.
-fn find_start_cell(maze: &Maze, ch: char) -> Option<(usize, usize)> {
+pub fn find_start_cell(maze: &Maze, ch: char) -> Option<(usize, usize)> {
     for (j, row) in maze.iter().enumerate() {
         for (i, &c) in row.iter().enumerate() {
             if c == ch {
@@ -297,6 +327,9 @@ impl StateHandler for AppState {
             Screens::Game(screen) => {
                 // Update any overlay GUI (HUD, pause button, etc.)
                 screen.update(window);
+                let dtt =  window.get_frame_time() as f64;
+                self.remaining_cooldown -= dtt;
+                self.animation_left -= dtt;
 
                 // ESC toggles pause and cursor
                 if window.is_key_pressed(KeyboardKey::KEY_ESCAPE) {
@@ -331,7 +364,7 @@ impl StateHandler for AppState {
                     self.update_enemies(dt);
 
                     // Enemy collisions
-                    self.check_enemy_collisions();
+                    self.check_enemy_collisions(window.get_time());
 
                     // Check win/lose
                     if self.is_on_goal() {

@@ -48,6 +48,11 @@ impl TextureManager {
     pub fn get_texture(&self, ch: char) -> Option<&Texture2D> {
         self.textures.get(&ch)
     }
+    pub fn rotate_images(&mut self) {
+        for image in self.images.values_mut() {
+            image.rotate_ccw();
+        }
+    }
 }
 
 fn get_pixel_color(image: &Image, x: i32, y: i32) -> Color {

@@ -13,7 +13,7 @@ pub struct Player {
 impl Player {
     
     pub fn process_events(&mut self, window: &mut RaylibHandle, maze: &Maze, block_size: f32) {
-        let move_speed: f32 = block_size / 10.0;
+        let move_speed: f32 = block_size / 25.0;
         const ROTATION_SPEED: f32 = PI / 50.0;
     
         // Rotate player

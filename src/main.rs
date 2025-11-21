@@ -22,7 +22,7 @@ use player::{Player};
 use caster::{cast_ray};
 use sprite::{};
 
-use crate::game::{AppState, StateHandler};
+use crate::game::{AppState, StateHandler, find_start_cell};
 use crate::gui::screens::Screens;
 use crate::sprite::draw_sprite;
 use crate::textures::TextureManager;
@@ -62,7 +62,8 @@ pub fn render_minimap(
             // choose color based on cell type
             let color = match cell {
                 ' ' => continue, // skip empty space
-                '#' => Color::DARKGRAY, // wall type 1
+                '-' => Color::DARKGRAY, // wall type 1
+                '|' => Color::DARKGRAY, // wall type 1
                 '+' => Color::BROWN,    // wall type 2
                 's' | 'S' => Color::GREEN,  // start
                 'g' | 'G' => Color::YELLOW, // goal
@@ -111,7 +112,7 @@ pub fn render_minimap(
 
     // Draw enemies (red)
     for enemy in enemies {
-        draw_marker(enemy.pos.x, enemy.pos.y, Color::RED);
+        draw_marker(enemy.pos.x, enemy.pos.y, Color::ORANGE);
     }
 }
 
@@ -137,8 +138,9 @@ pub fn render_world(framebuffer: &mut Framebuffer, player: &Player, maze: &Maze,
 
         for y in stake_top..stake_bottom {
             framebuffer.set_current_color(match intersect.impact {
-                '+' => Color::YELLOW,
-                _ => Color::RED,
+                '+' => Color::ORANGERED,
+                'g' => Color::GREEN,
+                _ => Color::YELLOW,
             });
             framebuffer.set_pixel(i, y, distance_to_wall);
         }
@@ -157,16 +159,25 @@ fn main() {
         .build();
     window.set_exit_key(None);
 
+    let audio = RaylibAudio::init_audio_device().expect("Failed to load audio device");
+    let music = audio.new_music("assets/video0.MP3").expect("failed to load music");
+    music.play_stream();
+    let damage_sound = audio.new_sound("assets/hit1.ogg").expect("Failed to load damage sound");
     let mut framebuffer = Framebuffer::new(window_width as u32, window_height as u32, Color::BLACK);
 
     framebuffer.set_background_color(Color::new(50, 50, 100, 255));
 
-    let mut game_state = AppState::init(window_width, window_height, block_size as f32);
     let texture_manager = TextureManager::new(&mut window, &raylib_thread);
+    let mut game_state = AppState::init(window_width, window_height, block_size as f32, texture_manager);
 
     while !window.window_should_close() && !game_state.close_window {
         game_state.handle_input(&mut window);
-
+        if game_state.close_window {break;}
+        music.update_stream();
+        if game_state.hit_frame {
+            damage_sound.play();
+            game_state.hit_frame = false;
+        }
         match game_state.current_screen {
             Screens::Game(_) => {
                 // 1. clear framebuffer
@@ -176,11 +187,11 @@ fn main() {
                 //process_events(&mut window, &mut player, &maze, block_size as f32);
                 //render_maze(&mut framebuffer, &maze, block_size, &player);
                 render_world(&mut framebuffer, &game_state.player, &game_state.mazes[game_state.current_level], block_size);
-
-                render_minimap(&mut framebuffer, &game_state.mazes[game_state.current_level], game_state.block_size as usize, &game_state.player, &game_state.enemies);
+                
                 for enemy in &game_state.enemies {
-                    draw_sprite(&mut framebuffer, &game_state.player, enemy, &texture_manager);
+                    draw_sprite(&mut framebuffer, &game_state.player, enemy, &game_state.texture_manager);
                 }
+                render_minimap(&mut framebuffer, &game_state.mazes[game_state.current_level], game_state.block_size as usize, &game_state.player, &game_state.enemies);
                 // 3. swap buffers
                 framebuffer.swap_buffers(&mut window, &raylib_thread, &game_state);
             }
@@ -194,8 +205,7 @@ fn main() {
                 game_state.current_screen.render(&mut d);
             }
         }
-        if game_state.close_window {break;}
 
-        thread::sleep(Duration::from_millis(16));
+        thread::sleep(Duration::from_millis(8));
     }
 }
